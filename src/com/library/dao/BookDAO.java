@@ -29,9 +29,11 @@ public class BookDAO {
                 INSERT INTO books
                     (isbn, title, author, type, total_copies, available_copies)
                 VALUES (?, ?, ?, ?, ?, ?)""";
+
         try (Connection conn = DBUtil.getConnection(); //跟DB拿Connection跟資料庫的連線   
              PreparedStatement ps = conn.prepareStatement(sql,
-                    Statement.RETURN_GENERATED_KEYS)) {
+                    Statement.RETURN_GENERATED_KEYS)) { 
+            //因為是AUTO_INCREMENT (自動編號)，所以不用指定ID
             ps.setString(1, book.getIsbn());
             ps.setString(2, book.getTitle());
             ps.setString(3, book.getAuthor());
@@ -39,7 +41,7 @@ public class BookDAO {
             ps.setInt(5, book.getTotalCopies());
             ps.setInt(6, book.getAvailableCopies());
             ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
+            try (ResultSet keys = ps.getGeneratedKeys()) { //ResultSet拿到結果next像讀取因為是新增所以是第一筆
                 if (keys.next()) {
                     book.setId(keys.getLong(1));
                 }
@@ -56,7 +58,7 @@ public class BookDAO {
                 PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, id);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty(); ////ResultSet拿到結果next像游標逐筆讀取把資料掃到底
             }
         } catch (SQLException e) {
             throw new DataAccessException("查詢藏書失敗", e);
@@ -73,8 +75,8 @@ public class BookDAO {
             System.out.println("SQL -> " + ps.toString()); //印出去查詢的SQL語句
 
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();//Optional是JAVA語法，如果要查的東西有就會回傳Optional，沒有就會回傳空 =>MemberMenu
-            }
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            } //Optional是JAVA新語法，不用寫if...，如果要查的東西有就會回傳Optional，沒有就會回傳空 =>MemberMenu
         } catch (SQLException e) {
             throw new DataAccessException("查詢藏書失敗", e);
         }
@@ -97,12 +99,65 @@ public class BookDAO {
     }
 
     /**
-     * 依書名／作者／類型組合條件查詢
-     * 任一參數為 null 或空字串代表「該條件不限」。
-     * SQL 骨架動態拼接，但值一律走佔位符。
+     * 依書名／作者／類型組合條件查詢 （F5） 任一參數為 null 或空字串代表「該條件不限」。 SQL 骨架動態拼接，但值一律走佔位符。
      */
     public List<Book> search(String title, String author, BookType type) {
-        return null;
+        StringBuilder sql = new StringBuilder("SELECT * FROM books WHERE 1 = 1");
+        List<Object> params = new ArrayList<>();
+
+        if (title != null && !title.isBlank()) {
+            sql.append(" AND title LIKE ?");
+            params.add("%" + title.trim() + "%");
+        }
+        if (author != null && !author.isBlank()) {
+            sql.append(" AND author LIKE ?");
+            params.add("%" + author.trim() + "%");
+        }
+        if (type != null) {
+            sql.append(" AND type = ?");
+            params.add(type.name());
+        }
+        sql.append(" ORDER BY title");
+
+        try (Connection conn = DBUtil.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                List<Book> list = new ArrayList<>();
+                while (rs.next()) {
+                    list.add(mapRow(rs));
+                }
+                return list;
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("查詢藏書失敗", e);
+        }
+    }
+
+     /** 借出一份：可用份數 −1（僅在 available_copies &gt; 0 時成立）。 */
+    public void decrementAvailable(long bookId) {
+        String sql = "UPDATE books SET available_copies = available_copies - 1 " //可用-1
+                + "WHERE id = ? AND available_copies > 0";
+        updateCopies(sql, bookId, "扣減可用份數失敗");
+    }
+
+    /** 歸還一份：可用份數 +1（不超過 total_copies）。 */
+    public void incrementAvailable(long bookId) {
+        String sql = "UPDATE books SET available_copies = available_copies + 1 "
+                + "WHERE id = ? AND available_copies < total_copies";
+        updateCopies(sql, bookId, "回補可用份數失敗");
+    }
+
+    private void updateCopies(String sql, long bookId, String errorMsg) {
+        try (Connection conn = DBUtil.getConnection();
+                PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, bookId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new DataAccessException(errorMsg, e);
+        }
     }
 
     /** 將目前 ResultSet 游標所在列轉為 Book 物件。 */

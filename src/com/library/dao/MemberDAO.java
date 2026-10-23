@@ -26,12 +26,13 @@ public class MemberDAO {
         try (Connection conn = DBUtil.getConnection(); ////跟DB拿Connection跟資料庫的連線
              PreparedStatement ps = conn.prepareStatement(sql,
                     Statement.RETURN_GENERATED_KEYS)) {
+            //因為是AUTO_INCREMENT (自動編號)，所以不用指定ID
             ps.setString(1, member.getMemberNo());
             ps.setString(2, member.getName());
             ps.setString(3, member.getType().name());
             ps.setString(4, member.getEmail());
             ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
+            try (ResultSet keys = ps.getGeneratedKeys()) { //ResultSet拿到結果next像讀取因為是新增所以是第一筆
                 if (keys.next()) {
                     member.setId(keys.getLong(1));
                 }
