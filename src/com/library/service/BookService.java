@@ -3,6 +3,8 @@ package com.library.service;
 import com.library.dao.BookDAO;
 import com.library.exception.DuplicateIsbnException;
 import com.library.model.Book;
+import com.library.model.BookType;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -53,6 +55,11 @@ public class BookService {
     /** 全部藏書。 */
     public List<Book> listAll() {
         return bookDao.findAll();
+    }
+
+     /** 組合條件查詢（F5）。 */
+    public List<Book> search(String title, String author, BookType type) {
+        return bookDao.search(title, author, type); //權限檢查完成後再傳入dao
     }
 
 

@@ -1,6 +1,6 @@
 package com.library.ui;
 
-import com.library.dao.MemberDAO;
+
 import com.library.exception.LibraryException;
 import com.library.model.MemberType;
 import com.library.service.MemberService;
@@ -10,9 +10,8 @@ public class MemberMenu {
 
     private final MemberService memberService;
 
-    public MemberMenu() {
-        MemberDAO memberDao = new MemberDAO();
-        this.memberService = new MemberService(memberDao);
+    public MemberMenu(MemberService memberService) {
+        this.memberService = memberService;
     }
 
     // ── 會員管理（F2）────────────────────────────────────────

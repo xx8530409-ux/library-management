@@ -99,15 +99,17 @@ public class BookDAO {
     }
 
     /**
-     * 依書名／作者／類型組合條件查詢 （F5） 任一參數為 null 或空字串代表「該條件不限」。 SQL 骨架動態拼接，但值一律走佔位符。
+     * 依書名／作者／類型組合條件查詢 （F5） 
+     * 任一參數為 null 或空字串代表「該條件不限」
+     * SQL 骨架動態拼接，但值一律走佔位符。
      */
     public List<Book> search(String title, String author, BookType type) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM books WHERE 1 = 1");
+        StringBuilder sql = new StringBuilder("SELECT * FROM books WHERE 1 = 1"); // WHERE 1 = 1 是為了可以用 AND 串聯條件 (輸入任一)
         List<Object> params = new ArrayList<>();
 
         if (title != null && !title.isBlank()) {
-            sql.append(" AND title LIKE ?");
-            params.add("%" + title.trim() + "%");
+            sql.append(" AND title LIKE ?"); //append串更長的字串
+            params.add("%" + title.trim() + "%");  //%內關鍵字，trim去空格
         }
         if (author != null && !author.isBlank()) {
             sql.append(" AND author LIKE ?");
@@ -117,7 +119,7 @@ public class BookDAO {
             sql.append(" AND type = ?");
             params.add(type.name());
         }
-        sql.append(" ORDER BY title");
+        sql.append(" ORDER BY title"); //書名去做排序
 
         try (Connection conn = DBUtil.getConnection();
                 PreparedStatement ps = conn.prepareStatement(sql.toString())) {
@@ -129,7 +131,7 @@ public class BookDAO {
                 while (rs.next()) {
                     list.add(mapRow(rs));
                 }
-                return list;
+                return list; // -> services -> Menu印出 
             }
         } catch (SQLException e) {
             throw new DataAccessException("查詢藏書失敗", e);
