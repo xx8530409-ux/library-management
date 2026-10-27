@@ -26,8 +26,8 @@ public class LoanDAO {
     /** 新增借閱紀錄，回填主鍵並回傳同一物件。 */
     public Loan insert(Loan loan) {
         String sql = """
-                INSERT INTO loans (book_id, member_id, loan_date, due_date, return_date, fine)
-                VALUES (?, ?, ?, ?, ?, ?)""";
+                INSERT INTO loans (book_id, member_id, loan_date, due_date, return_date, fine, renew_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?)""";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql,
                      Statement.RETURN_GENERATED_KEYS)) {
@@ -38,6 +38,7 @@ public class LoanDAO {
             ps.setDate(5, loan.getReturnDate() == null
                     ? null : Date.valueOf(loan.getReturnDate()));
             ps.setBigDecimal(6, loan.getFine());
+            ps.setInt(7, loan.getRenewCount());
         
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -59,10 +60,24 @@ public class LoanDAO {
             ps.setDate(1, loan.getReturnDate() == null
                     ? null : Date.valueOf(loan.getReturnDate()));
             ps.setBigDecimal(2, loan.getFine());
-            ps.setLong(3, loan.getId()); //更新id的借閱紀錄
+            ps.setLong(3, loan.getId()); // 更新 id 的借閱紀錄
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new DataAccessException("更新借閱紀錄失敗", e);
+        }
+    }
+
+    /** 更新借閱紀錄的到期日與續借次數（續借用）。 */
+    public void updateRenewal(Loan loan) {
+        String sql = "UPDATE loans SET due_date = ?, renew_count = ? WHERE id = ?";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setDate(1, Date.valueOf(loan.getDueDate()));
+            ps.setInt(2, loan.getRenewCount());
+            ps.setLong(3, loan.getId());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new DataAccessException("更新續借紀錄失敗", e);
         }
     }
 
@@ -81,8 +96,8 @@ public class LoanDAO {
     }
 
     /** 會員目前未還書數（用於借閱上限檢查）。 */
-    public int countActiveByMember(long memberId) { //用會員id查詢
-        String sql = "SELECT COUNT(*) FROM loans " //count多少筆
+    public int countActiveByMember(long memberId) { // 用會員 id 查詢
+        String sql = "SELECT COUNT(*) FROM loans " // count 多少筆
                 + "WHERE member_id = ? AND return_date IS NULL";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -100,23 +115,14 @@ public class LoanDAO {
      * 條件：未歸還且到期日早於今天。
      */
     public boolean hasOverdue(long memberId) {
-        String sql = "SELECT 1 FROM loans " //1借位符
-                + "WHERE member_id = ? AND return_date IS NULL AND due_date < CURDATE() " // 到期日<今天=逾期
-                + "LIMIT 1"; //查找一筆，有就有，因為只想知道有無逾期
-
-        //       -> 找出多筆        
-        //       SELECT * FROM loans "
-        //       + "WHERE member_id = ? AND return_date IS NULL AND due_date < CURDATE() 
-
-        //       ResultSet rs = ps.executeQuery();
-        //       rs.last(); <--- jump to the last row
-        //       return rs.getRow() == 1;
-
+        String sql = "SELECT 1 FROM loans "
+                + "WHERE member_id = ? AND return_date IS NULL AND due_date < CURDATE() "
+                + "LIMIT 1";
         try (Connection conn = DBUtil.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, memberId);
             try (ResultSet rs = ps.executeQuery()) {   
-                return rs.next(); //有回傳代表有筆數，代表有逾期
+                return rs.next(); // 有回傳代表有逾期
             }
         } catch (SQLException e) {
             throw new DataAccessException("查詢逾期狀態失敗", e);
@@ -204,6 +210,12 @@ public class LoanDAO {
     private Loan mapRow(ResultSet rs) throws SQLException {
         Date ret = rs.getDate("return_date");
         BigDecimal fine = rs.getBigDecimal("fine");
+        int renewCount = 0;
+        try {
+            renewCount = rs.getInt("renew_count");
+        } catch (SQLException ignored) {
+            // 防禦性容錯：若尚未執行 migration 亦能正常運作
+        }
         return new Loan(
                 rs.getLong("id"),
                 rs.getLong("book_id"),
@@ -211,6 +223,7 @@ public class LoanDAO {
                 rs.getDate("loan_date").toLocalDate(),
                 rs.getDate("due_date").toLocalDate(),
                 ret == null ? null : ret.toLocalDate(),
-                fine == null ? BigDecimal.ZERO : fine);
+                fine == null ? BigDecimal.ZERO : fine,
+                renewCount);
     }
 }

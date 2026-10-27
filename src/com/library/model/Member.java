@@ -44,6 +44,11 @@ public class Member {
         return type.extraDays();
     }
 
+    /** 續借天數（天）。 */
+    public int renewalDays() {
+        return type.renewalDays();
+    }
+
     // ── getter / setter ─────────────────────────────────────
 
     public long getId() {

@@ -10,11 +10,11 @@ public class LoanMenu {
 
     private final LoanService loanService;
 
-     public LoanMenu(LoanService loanService) {
+    public LoanMenu(LoanService loanService) {
         this.loanService = loanService;
     }
 
-    // ── 借閱管理（F3 / F4）───────────────────────────────────
+    // ── 借閱管理（F3 / F4 / 續借）─────────────────────────────
 
     public void loanMenu() {
         while (true) {
@@ -23,12 +23,14 @@ public class LoanMenu {
                     ──── 借閱管理 ────
                      1. 借書
                      2. 還書
-                     3. 未歸還清單
+                     3. 續借
+                     4. 未歸還清單
                      9. 回上層""");
             switch (InputHandler.input("請選擇")) {
                 case "1" -> borrow();
                 case "2" -> returnBook();
-                case "3" -> listActiveLoans();
+                case "3" -> renew();
+                case "4" -> listActiveLoans();
                 case "9" -> {
                     return;
                 }
@@ -52,7 +54,7 @@ public class LoanMenu {
     private void returnBook() {
         try {
             long loanId = InputHandler.inputInt("借閱單 id");
-            ReturnResult r = loanService.returnBook(loanId); //規則寫在 LoanService 中
+            ReturnResult r = loanService.returnBook(loanId);
             if (r.isOverdue()) {
                 System.out.printf("✔ 還書完成：逾期 %d 天，罰金 %s 元%n",
                         r.overdueDays(), r.fine().toPlainString());
@@ -64,14 +66,26 @@ public class LoanMenu {
         }
     }
 
+    private void renew() {
+        try {
+            long loanId = InputHandler.inputInt("借閱單 id");
+            Loan loan = loanService.renew(loanId);
+            System.out.printf("✔ 續借成功：借閱單 #%d，新應還日為 %s（限續借 1 次）%n",
+                    loan.getId(), loan.getDueDate());
+        } catch (LibraryException | IllegalArgumentException e) {
+            System.out.println("✘ " + e.getMessage());
+        }
+    }
+
     private void listActiveLoans() {
-        List<Loan> loans = loanService.listActiveLoans(); //去service呼叫loanDao.findAllActive
+        List<Loan> loans = loanService.listActiveLoans();
         if (loans.isEmpty()) {
             System.out.println("（目前無未歸還借閱）");
             return;
         }
         System.out.println("未歸還共 " + loans.size() + " 筆：");
-        loans.forEach(l -> System.out.printf("  #%d 書 id=%d 會員 id=%d 應還 %s%n",
-                l.getId(), l.getBookId(), l.getMemberId(), l.getDueDate()));
+        loans.forEach(l -> System.out.printf("  借閱單 #%d 書 id=%d 會員 id=%d 應還 %s%s%n",
+                l.getId(), l.getBookId(), l.getMemberId(), l.getDueDate(),
+                l.getRenewCount() > 0 ? " (已續借)" : ""));
     }
 }

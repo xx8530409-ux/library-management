@@ -1,2 +1,3 @@
 # 資料庫連線設定檔，不會被提交 (因為有帳密)
-	src/db.properties
+src/db.properties
+bin/
